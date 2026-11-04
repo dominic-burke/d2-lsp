@@ -1,0 +1,43 @@
+{
+  "D2 shape": {
+    "prefix": "d2-shape",
+    "body": [
+      "${1:shape}: {",
+      "  label: \"${2:Label}\"",
+      "  shape: ${3:rectangle}",
+      "}"
+    ],
+    "description": "Create a D2 shape"
+  },
+  "D2 connection": {
+    "prefix": "d2-connection",
+    "body": [
+      "${1:source} -> ${2:target}: \"${3:label}\""
+    ],
+    "description": "Create a D2 connection"
+  },
+  "D2 class": {
+    "prefix": "d2-class",
+    "body": [
+      "classes.${1:name}: {",
+      "  style: {",
+      "    fill: ${2:#f0f0f0}",
+      "  }",
+      "}"
+    ],
+    "description": "Create a reusable D2 class"
+  },
+  "D2 SQL table": {
+    "prefix": "d2-sql-table",
+    "body": [
+      "${1:table}: {",
+      "  shape: sql_table",
+      "  id: int {",
+      "    constraint: primary_key",
+      "  }",
+      "  ${2:name}: varchar",
+      "}"
+    ],
+    "description": "Create a D2 SQL table"
+  }
+}

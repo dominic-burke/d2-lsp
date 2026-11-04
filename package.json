@@ -1,0 +1,74 @@
+{
+  "name": "d2-language-support",
+  "displayName": "D2 Language Support",
+  "description": "Language Server Protocol support for the D2 diagram scripting language.",
+  "version": "0.1.0",
+  "publisher": "d2-language-support",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:d2"
+  ],
+  "main": "./dist/client/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "d2LanguageSupport.preview",
+        "title": "D2: Open Preview"
+      }
+    ],
+    "configuration": {
+      "title": "D2 Language Support",
+      "properties": {
+        "d2LanguageSupport.d2Path": {
+          "type": "string",
+          "default": "d2",
+          "description": "Path to the D2 CLI executable."
+        },
+        "d2LanguageSupport.previewOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Refresh the D2 preview when the document is saved."
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "d2",
+        "aliases": [
+          "D2",
+          "d2"
+        ],
+        "extensions": [
+          ".d2"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "d2",
+        "path": "./snippets/d2.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/test/**/*.test.js"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.7.2"
+  }
+}
