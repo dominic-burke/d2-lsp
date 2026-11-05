@@ -57,6 +57,8 @@ The preview renders the file on disk, so save before running it.
 
 ## Development
 
+Requires Node.js 18 or newer.
+
 ```sh
 npm install
 npm run build   # compile TypeScript to dist/
@@ -65,6 +67,9 @@ npm test        # run the test suite
 
 The test suite covers the parser, indexer, diagnostics, formatter, and
 completion logic. It does not require the D2 CLI.
+
+CI runs the build and tests on Node 18, 20, and 22 on Linux, plus Node 22 on
+Windows and macOS, and verifies that the extension packages with `vsce`.
 
 ## How it works
 

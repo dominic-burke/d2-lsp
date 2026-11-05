@@ -1,0 +1,16 @@
+# Sources and build configuration are not needed at runtime; the extension runs from dist/.
+src/**
+tsconfig.json
+.github/**
+.vscode/**
+.gitignore
+.vscodeignore
+
+# Test output is compiled into dist/test but is not part of the extension.
+dist/test/**
+
+# Development-only dependencies.
+node_modules/@types/**
+node_modules/typescript/**
+**/*.map
+**/*.ts
