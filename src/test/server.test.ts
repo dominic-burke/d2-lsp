@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import * as path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import { Position } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { completionAt } from "../server/completion.js";
@@ -15,8 +17,10 @@ import {
 import { localDiagnostics } from "../server/diagnostics.js";
 import { mergeImportedIndexes } from "../server/imports.js";
 
+const SAMPLE_URI = pathToFileURL(path.join(process.cwd(), "sample.d2")).toString();
+
 function document(text: string): TextDocument {
-  return TextDocument.create("file:///sample.d2", "d2", 1, text);
+  return TextDocument.create(SAMPLE_URI, "d2", 1, text);
 }
 
 test("completes nested D2 objects after a dot", () => {
