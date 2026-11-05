@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import { Position } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { completionAt } from "../server/completion.js";
@@ -17,6 +21,22 @@ import { mergeImportedIndexes } from "../server/imports.js";
 
 function document(text: string): TextDocument {
   return TextDocument.create("file:///sample.d2", "d2", 1, text);
+}
+
+// Import diagnostics resolve against the document's directory, so these tests need a URI that is
+// valid on the host platform. `file:///sample.d2` has no drive letter and is rejected by
+// `fileURLToPath` on Windows.
+function fileDocument(text: string, directory: string): TextDocument {
+  return TextDocument.create(pathToFileURL(path.join(directory, "sample.d2")).href, "d2", 1, text);
+}
+
+function withTempDirectory(run: (directory: string) => void): void {
+  const directory = mkdtempSync(path.join(tmpdir(), "d2-lsp-test-"));
+  try {
+    run(directory);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 test("completes nested D2 objects after a dot", () => {
@@ -312,15 +332,45 @@ test("records the line of each import", () => {
 });
 
 test("does not report a missing import for a URL", () => {
-  const doc = document('...@"https://example.com/x"');
-  assert.deepEqual(localDiagnostics(doc, indexDocument(doc)), []);
+  withTempDirectory(directory => {
+    const doc = fileDocument('...@"https://example.com/x"', directory);
+    assert.deepEqual(localDiagnostics(doc, indexDocument(doc)), []);
+  });
 });
 
 test("points a missing import diagnostic at the import line", () => {
-  const doc = document("a: b\n...@\"./missing\"");
-  const missing = localDiagnostics(doc, indexDocument(doc)).filter(item => item.message.includes("not found"));
-  assert.equal(missing.length, 1);
-  assert.equal(missing[0].range.start.line, 1);
+  withTempDirectory(directory => {
+    const doc = fileDocument("a: b\n...@\"./missing\"", directory);
+    const missing = localDiagnostics(doc, indexDocument(doc)).filter(item => item.message.includes("not found"));
+    assert.equal(missing.length, 1);
+    assert.equal(missing[0].range.start.line, 1);
+  });
+});
+
+test("reports a resolved import as a hint", () => {
+  withTempDirectory(directory => {
+    writeFileSync(path.join(directory, "present.d2"), "x: y\n");
+    const doc = fileDocument("...@\"./present\"", directory);
+    const diagnostics = localDiagnostics(doc, indexDocument(doc));
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].message.includes("not found"), false);
+    assert.equal(diagnostics[0].message.includes("Import resolved"), true);
+  });
+});
+
+test("appends the .d2 extension when resolving an import", () => {
+  withTempDirectory(directory => {
+    writeFileSync(path.join(directory, "present.d2"), "x: y\n");
+    const doc = fileDocument("...@\"./present.d2\"", directory);
+    const diagnostics = localDiagnostics(doc, indexDocument(doc));
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].message.includes("Import resolved"), true);
+  });
+});
+
+test("skips import diagnostics for documents without a file URI", () => {
+  const doc = TextDocument.create("untitled:Untitled-1", "d2", 1, "...@\"./missing\"");
+  assert.deepEqual(localDiagnostics(doc, indexDocument(doc)), []);
 });
 
 // --- diagnostics -----------------------------------------------------------------------------
