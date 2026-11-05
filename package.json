@@ -5,8 +5,24 @@
   "version": "0.1.0",
   "publisher": "d2-language-support",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dominic-burke/d2-lsp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dominic-burke/d2-lsp/issues"
+  },
+  "homepage": "https://github.com/dominic-burke/d2-lsp#readme",
+  "keywords": [
+    "d2",
+    "diagram",
+    "diagrams-as-code",
+    "language-server",
+    "lsp"
+  ],
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.85.0",
+    "node": ">=18"
   },
   "categories": [
     "Programming Languages"

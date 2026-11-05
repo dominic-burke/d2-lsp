@@ -47,7 +47,7 @@ function validateWithCli(
     child.on("error", error => {
       const code = (error as NodeJS.ErrnoException).code;
       finish(1, code === "ENOENT"
-        ? `D2 CLI not found: ${options.d2Path || "d2"}. Install D2 or set "d2.path".`
+        ? `D2 CLI not found: ${options.d2Path || "d2"}. Install D2 or set "d2LanguageSupport.d2Path".`
         : error.message);
     });
     child.on("close", code => finish(code ?? 1, output));
