@@ -13,7 +13,13 @@ import {
   WorkspaceEdit
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { D2_KEYWORDS, D2_SHAPES, D2_STYLE_KEYWORDS, D2_VALUE_HINTS } from "../shared/keywords.js";
+import {
+  D2_KEYWORDS,
+  D2_RESERVED_FIELDS,
+  D2_SHAPES,
+  D2_STYLE_KEYWORDS,
+  D2_VALUE_HINTS
+} from "../shared/keywords.js";
 import {
   DocumentIndex,
   lineText,
@@ -64,9 +70,19 @@ export function hoverAt(document: TextDocument, position: Position, index: Docum
   };
 }
 
-export function documentSymbols(document: TextDocument, index: DocumentIndex): DocumentSymbol[] {
+/**
+ * Returns the definitions that represent diagram objects. Connection endpoints only reference
+ * objects, and style properties are configuration rather than objects, so neither is a symbol.
+ */
+export function objectDefinitions(index: DocumentIndex): SymbolDefinition[] {
   return index.definitions
     .filter(symbol => symbol.kind !== CompletionItemKind.Module)
+    .filter(symbol => symbol.origin !== "connection")
+    .filter(symbol => !isStyleKey(symbol.path));
+}
+
+export function documentSymbols(document: TextDocument, index: DocumentIndex): DocumentSymbol[] {
+  return objectDefinitions(index)
     .map(symbol => DocumentSymbol.create(
       symbol.name,
       symbol.path,
@@ -80,6 +96,23 @@ export function documentSymbols(document: TextDocument, index: DocumentIndex): D
         { line: symbol.line, character: symbol.end }
       )
     ));
+}
+
+/** True when the path points at a style property rather than a diagram object. */
+function isStyleKey(path: string): boolean {
+  const lower = path.toLowerCase();
+  return lower === "style" || lower.startsWith("style.") || lower.includes(".style.");
+}
+
+/**
+ * True when the symbol is a D2 field name rather than an object name. Renaming these changes the
+ * meaning of the diagram, so rename and reference lookups refuse them.
+ */
+function isReservedField(symbol: SymbolDefinition): boolean {
+  if (symbol.origin === "parent") {
+    return false;
+  }
+  return D2_RESERVED_FIELDS.includes(symbol.name.toLowerCase() as typeof D2_RESERVED_FIELDS[number]);
 }
 
 function matchesSymbol(reference: SymbolReference, symbol: SymbolDefinition): boolean {
@@ -112,7 +145,7 @@ function matchingRanges(index: DocumentIndex, symbol: SymbolDefinition): Range[]
 
 export function referencesAt(document: TextDocument, position: Position, index: DocumentIndex): DocumentHighlight[] {
   const symbol = referenceAt(document, position, index);
-  if (!symbol) {
+  if (!symbol || isReservedField(symbol) || isStyleKey(symbol.path)) {
     return [];
   }
   return matchingRanges(index, symbol).map(range => DocumentHighlight.create(range));
@@ -128,7 +161,7 @@ export function renameAt(
     return null;
   }
   const symbol = referenceAt(document, position, index);
-  if (!symbol) {
+  if (!symbol || isReservedField(symbol) || isStyleKey(symbol.path)) {
     return null;
   }
   const edits = matchingRanges(index, symbol).map(range => TextEdit.replace(range, newName));
@@ -171,6 +204,20 @@ function normalizeKeyColons(line: string): string {
     const hasValue = after < line.length;
     edits.push({ start: before, end: after, text: hasValue ? ": " : ":" });
   }
+  // Collapse runs of whitespace after a `;` separator. The separator positions come from the
+  // masked line so that semicolons inside strings and comments are left untouched.
+  for (let i = 0; i < masked.length; i++) {
+    if (masked[i] !== ";") {
+      continue;
+    }
+    let after = i + 1;
+    while (after < line.length && /\s/.test(line[after])) {
+      after++;
+    }
+    if (after > i + 1 && after < line.length) {
+      edits.push({ start: i + 1, end: after, text: " " });
+    }
+  }
   if (edits.length === 0) {
     return line;
   }
@@ -178,7 +225,7 @@ function normalizeKeyColons(line: string): string {
   for (const edit of edits.sort((a, b) => b.start - a.start)) {
     result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
   }
-  return result.replace(/;\s+/g, "; ");
+  return result;
 }
 
 export function formatDocument(document: TextDocument): TextEdit[] {
@@ -186,12 +233,15 @@ export function formatDocument(document: TextDocument): TextEdit[] {
   const eol = original.includes("\r\n") ? "\r\n" : "\n";
   const lines = original.split(/\r?\n/);
   let indent = 0;
-  let inBlockString = false;
+  let blockStringTerminator: string | null = null;
+  let blockStringIndent = 0;
   const output = lines.map(rawLine => {
-    if (inBlockString) {
-      if (rawLine.trim() === "|") {
-        inBlockString = false;
-        return `${"  ".repeat(indent)}|`;
+    if (blockStringTerminator) {
+      // Block string bodies are verbatim: only the terminator is re-indented.
+      if (rawLine.trim() === blockStringTerminator) {
+        const terminator = blockStringTerminator;
+        blockStringTerminator = null;
+        return `${"  ".repeat(blockStringIndent)}${terminator}`;
       }
       return rawLine;
     }
@@ -199,7 +249,7 @@ export function formatDocument(document: TextDocument): TextEdit[] {
     if (!trimmed) {
       return "";
     }
-    const { masked, blockString } = scanLine(trimmed);
+    const { masked, blockString, blockStringTerminator: terminator } = scanLine(trimmed);
     const opens = (masked.match(/[{[]/g) ?? []).length;
     const closes = (masked.match(/[}\]]/g) ?? []).length;
     if (closes > opens) {
@@ -207,7 +257,8 @@ export function formatDocument(document: TextDocument): TextEdit[] {
     }
     const formatted = `${"  ".repeat(indent)}${normalizeKeyColons(trimmed)}`;
     if (blockString) {
-      inBlockString = true;
+      blockStringTerminator = terminator;
+      blockStringIndent = indent;
       return formatted;
     }
     if (opens > closes || (opens === closes && /:\s*$/.test(masked))) {

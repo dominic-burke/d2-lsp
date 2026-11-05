@@ -9,7 +9,7 @@ import {
   Range
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { DocumentIndex, lineText } from "./documentIndex.js";
+import { DocumentIndex, lineText, scanLine } from "./documentIndex.js";
 import { D2_SHAPES, D2_STYLE_KEYWORDS } from "../shared/keywords.js";
 
 export interface CompilerOptions {
@@ -44,7 +44,12 @@ function validateWithCli(
     };
     child.stdout.on("data", chunk => output += chunk.toString());
     child.stderr.on("data", chunk => output += chunk.toString());
-    child.on("error", error => finish(1, error.message));
+    child.on("error", error => {
+      const code = (error as NodeJS.ErrnoException).code;
+      finish(1, code === "ENOENT"
+        ? `D2 CLI not found: ${options.d2Path || "d2"}. Install D2 or set "d2.path".`
+        : error.message);
+    });
     child.on("close", code => finish(code ?? 1, output));
     child.stdin.on("error", () => {
       // The child may exit before consuming stdin; the close handler reports the real result.
@@ -61,7 +66,9 @@ export function localDiagnostics(document: TextDocument, index: DocumentIndex): 
   const diagnostics: Diagnostic[] = [];
   const seen = new Map<string, number>();
   for (const definition of index.definitions) {
-    if (definition.origin === "parent") {
+    // Parents are implied by dotted keys and connections only reference existing objects, so
+    // neither is a duplicate declaration.
+    if (definition.origin === "parent" || definition.origin === "connection") {
       continue;
     }
     const key = definition.path.toLowerCase();
@@ -81,16 +88,15 @@ export function localDiagnostics(document: TextDocument, index: DocumentIndex): 
   }
 
   const directory = documentDirectory(document);
-  const lines = document.getText().split(/\r?\n/);
-  for (const imported of index.imports) {
+  index.imports.forEach((imported, position) => {
     if (imported.startsWith("http://") || imported.startsWith("https://")) {
-      continue;
+      return;
     }
-    const importLine = lines.findIndex(line => line.includes(`@${imported}`));
-    const line = Math.max(0, importLine);
     if (!directory) {
-      continue;
+      return;
     }
+    const reference = index.importReferences[position];
+    const line = reference?.line ?? 0;
     const importPath = path.resolve(directory, imported.endsWith(".d2") ? imported : `${imported}.d2`);
     const resolved = existsSync(importPath);
     diagnostics.push({
@@ -99,7 +105,7 @@ export function localDiagnostics(document: TextDocument, index: DocumentIndex): 
       message: resolved ? `Import resolved from ${importPath}.` : `D2 import not found: ${importPath}.`,
       source: "d2"
     });
-  }
+  });
 
   for (const styleKey of index.styleKeys) {
     if (D2_STYLE_KEYWORDS.includes(styleKey.name as typeof D2_STYLE_KEYWORDS[number])) {
@@ -116,14 +122,31 @@ export function localDiagnostics(document: TextDocument, index: DocumentIndex): 
     });
   }
 
+  // Shape values are scanned on the masked line so that `label: "shape: bogus"`, comments, and
+  // block string bodies do not produce false positives.
+  const lines = document.getText().split(/\r?\n/);
+  let blockStringTerminator: string | null = null;
   lines.forEach((line, lineNumber) => {
-    const shape = line.match(/\bshape\s*:\s*([A-Za-z_][\w-]*)/);
-    if (shape && !D2_SHAPES.includes(shape[1] as typeof D2_SHAPES[number])) {
-      const start = line.indexOf(shape[1]);
+    if (blockStringTerminator) {
+      if (line.trim() === blockStringTerminator) {
+        blockStringTerminator = null;
+      }
+      return;
+    }
+    const { masked, blockStringTerminator: terminator } = scanLine(line);
+    if (terminator) {
+      blockStringTerminator = terminator;
+    }
+    for (const shape of masked.matchAll(/\bshape\s*:\s*([A-Za-z_][\w-]*)/g)) {
+      const name = shape[1];
+      if (D2_SHAPES.includes(name as typeof D2_SHAPES[number])) {
+        continue;
+      }
+      const start = (shape.index ?? 0) + shape[0].length - name.length;
       diagnostics.push({
         severity: DiagnosticSeverity.Warning,
-        range: Range.create(Position.create(lineNumber, start), Position.create(lineNumber, start + shape[1].length)),
-        message: `Unknown D2 shape '${shape[1]}'.`,
+        range: Range.create(Position.create(lineNumber, start), Position.create(lineNumber, start + name.length)),
+        message: `Unknown D2 shape '${name}'.`,
         source: "d2"
       });
     }

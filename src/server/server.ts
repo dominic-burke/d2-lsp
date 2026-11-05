@@ -25,6 +25,7 @@ import {
   documentSymbols,
   formatDocument,
   hoverAt,
+  objectDefinitions,
   referencesAt,
   renameAt
 } from "./features.js";
@@ -174,8 +175,8 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[
   const query = params.query.toLowerCase();
   const results: SymbolInformation[] = [];
   for (const [uri, index] of indexes) {
-    for (const symbol of index.definitions) {
-      if (symbol.kind === CompletionItemKind.Module || !symbol.name.toLowerCase().includes(query)) {
+    for (const symbol of objectDefinitions(index)) {
+      if (!symbol.name.toLowerCase().includes(query)) {
         continue;
       }
       results.push(SymbolInformation.create(

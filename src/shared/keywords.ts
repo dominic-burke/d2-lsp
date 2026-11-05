@@ -65,10 +65,6 @@ export const D2_STYLE_KEYWORDS = [
   "fill-pattern",
   "stroke-width",
   "stroke-dash",
-  "stroke-dash-gap",
-  "stroke-dash-offset",
-  "stroke-linecap",
-  "stroke-linejoin",
   "border-radius",
   "shadow",
   "3d",
@@ -81,18 +77,42 @@ export const D2_STYLE_KEYWORDS = [
   "bold",
   "italic",
   "underline",
-  "text-transform",
-  "root"
+  "text-transform"
+] as const;
+
+/**
+ * Field names that D2 interprets specially. Renaming one of these changes the meaning of the
+ * diagram instead of renaming an object, so rename requests are refused for them.
+ */
+export const D2_RESERVED_FIELDS = [
+  "shape",
+  "label",
+  "style",
+  "class",
+  "classes",
+  "icon",
+  "tooltip",
+  "link",
+  "width",
+  "height",
+  "near",
+  "direction",
+  "grid-rows",
+  "grid-columns",
+  "constraint",
+  "animated",
+  "source-arrowhead",
+  "target-arrowhead",
+  "top",
+  "left"
 ] as const;
 
 export const D2_VALUE_HINTS: Record<string, string[]> = {
   shape: [...D2_SHAPES],
   direction: ["up", "down", "left", "right"],
   layout: ["dagre", "elk", "tala"],
-  "fill-pattern": ["dots", "lines", "grain", "none"],
-  "text-transform": ["uppercase", "lowercase", "title", "none"],
-  "stroke-linecap": ["butt", "round", "square"],
-  "stroke-linejoin": ["miter", "round", "bevel"],
+  "fill-pattern": ["none", "dots", "lines", "grain", "paper"],
+  "text-transform": ["none", "uppercase", "lowercase", "capitalize"],
   font: ["mono"],
   animated: ["true", "false"],
   shadow: ["true", "false"],
